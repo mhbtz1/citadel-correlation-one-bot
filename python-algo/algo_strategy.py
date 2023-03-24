@@ -32,6 +32,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         gamelib.debug_write('Configuring your custom algo strategy...')
         self.config = config
+        self.game_stage = 0
         global WALL, SUPPORT, TURRET, SCOUT, DEMOLISHER, INTERCEPTOR, MP, SP
         WALL = config["unitInformation"][0]["shorthand"]
         SUPPORT = config["unitInformation"][1]["shorthand"]
@@ -56,6 +57,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
         
+        my_resources = game_state.get_resources(0)
+
         self.starter_strategy(game_state)
 
         game_state.submit_turn()
@@ -100,6 +103,9 @@ class AlgoStrategy(gamelib.AlgoCore):
                 # Lastly, if we have spare SP, let's build some supports
                 support_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
                 game_state.attempt_spawn(SUPPORT, support_locations)
+
+    def intermediate_strategy(self, game_state):
+
 
     def build_defences(self, game_state):
         """
