@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # C1GamesStarterKit
 
 Welcome to the C1 Terminal Starter Kit! The repository contains a collection of scripts and 
@@ -63,3 +64,7 @@ Java algos require the Java Development Kit. Java algos also require [Gradle]
 
 To run your algo locally or on our servers, or to enroll your algo in a competition, please see the [documentation 
 for the Terminal command line interface in the scripts directory]
+=======
+# citadel-correlation-one-bot
+2023 East Cost Correlation One Contest - Citadel
+>>>>>>> f33c1806edff06baf54d7a3fd778d34eff636e4b
