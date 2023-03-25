@@ -46,6 +46,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.locations_scored_on = [] #locations we have scored on in the past
         self.recent_points_of_attack = [] #locations of recent points our units have been attacked from
         self.placed_units = defaultdict(tuple) #dictionary mapping position to if it is currently placed
+        self.TURRET_LIMIT_PER_TURN = 4 #limit for number of turrets we build per turn
 
         self.current_resources = [-1, -1] #SP & MP points
         self.enemy_resources = [-1, -1] #SP & MP points
@@ -53,11 +54,12 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.rush_flag_status = 1 #will indicate how to randomize our offence strategy
         self.defence_flag_status = 1 #will indicate how to randomize our defence strategy
 
-        self.ordered_turret_placement_preferences = [ [4, 11], [8, 11], [18, 11], [22, 11], [5, 11], [21, 11], [13, 11], [5, 10], [21, 10]]
-        #arrangement of preferenes over turret placement (can be rearranged by heuristics later based on attacked sides)
-        self.ordered_turret_upgrade_preferences = []
+        self.ordered_turret_placement_preferences = [ [4, 11], [22, 11], [6, 11], [20, 11], [8, 11], [18, 11], [4, 12], [22, 12], [6, 12], [20, 12], [8, 12], [18, 12] ]
+        #arrangement of preferenes over turret upgrades (can be rearranged by heuristics later based on attacked sides)
+        self.ordered_turret_upgrade_preferences = [ [4, 11], [22, 11], [6, 11], [20, 11], [8, 11], [18, 11], [4, 12], [22, 12], [6, 12], [20, 12], [8, 12], [18, 12] ]
 
-        self.
+        self.ordered_wall_placement_preferences = []
+        self.oredered_wall_upgrade_preferences = []
 
 
     def on_turn(self, turn_state):
@@ -72,10 +74,16 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
         
+        for k in self.placed_units.keys():
+            if(not game_state.contains_stationary_unit([k[0], k[1]]) ):
+                game_state[ (k[0], k[1]) ] = False
+
         self.starter_strategy(game_state)
         self.rush_strategy(game_state)
         self.defence_strategy(game_state)
-        self.update_heuristics(game_state)
+
+        self.update_turret_preference_list(game_state)
+        self.update_turret_upgrade_list(game_state)
 
         game_state.submit_turn()
 
@@ -131,7 +139,11 @@ class AlgoStrategy(gamelib.AlgoCore):
                 p = random.randint(0, 13)
                 amount = random.randint(1, math.floor(math.log2(game_state.turn_number) + 1) )
                 game_state.attempt_spawn(SCOUT, [p, 13 - p], amount)
-        
+            else:
+                p = random.randint(0, 13)
+                amount - random.randint(1, math.floor(math.log2(game_state.turn_number)) + 1)
+                d = {0 : 14, 1 : 15, 2 : 16, 3: 17, 4 : 18, 5 : 19, 6: 20, 7 : 21, 8 : 22, 9 : 23, 10: 24, 11: 25, 12: 26, 13: 27}
+                game_state.attempt_spawn(SCOUT, [p, d[p]], amount)
         elif(self.rush_flag == 2): #scout kamikaze
             pass
         elif(self.rush_flag == 3): #demolisher line
@@ -139,23 +151,27 @@ class AlgoStrategy(gamelib.AlgoCore):
         elif(self.rush_flag == 4): 
             pass
 
-    
-    def update_heuristics(self, game_state):
-        pass
+
+    def update_turret_upgrade_list(self, game_state):
+        #if the health of a turret is very low, we are incentivized to not upgrade it & rather defend it with a interceptor.
+        new_preferences = []
+
+        for j in self.ordered_turret_upgrade_preferences:
+            if(game_state.get_)
 
 
     def defence_strategy(self, game_state):
         #randomized turret + wall placement
         if(self.defence_flag_status == 1): #use this flag for some early game stuff/potential demolisher randomization strat
             built_turrets = 0
-            turret_limits = 4
+            turret_limits = self.TURRET_LIMIT_PER_TURN #only build at most 4 turrets per turn
             current_resources = game_state.get_resources(0)[0]
             locs = []
             used_resources = 0
             turret_cost = 6
             upgrade_cost = 4
 
-
+            #if a turret is at sufficiently low health
             for p in self.ordered_turret_placement_preferences:
                 if(built_turrets >= 4):
                     break
@@ -163,12 +179,13 @@ class AlgoStrategy(gamelib.AlgoCore):
                     used_resources += turret_cost
                     built_turrets += 1
                     locs.append(p)
+                    self.placed_units[(p[0], p[1])] = True
             
             
-            self.upgrading_heuristic(game_state)
             game_state.attempt_spawn(TURRET, locs)
 
-        elif(self.defence_flag_status == 2):
+        elif(self.defence_flag_status == 2): #place down walls that form corridors for demolishers & scouts
+            positions = ran
 
 
 
