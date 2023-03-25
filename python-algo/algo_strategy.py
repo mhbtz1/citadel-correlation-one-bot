@@ -56,8 +56,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
         
+        enemy_resources = game_state.get_resources(1)
         self.starter_strategy(game_state)
-
+        
         game_state.submit_turn()
 
 
@@ -101,6 +102,11 @@ class AlgoStrategy(gamelib.AlgoCore):
                 support_locations = [[13, 2], [14, 2], [13, 3], [14, 3]]
                 game_state.attempt_spawn(SUPPORT, support_locations)
 
+    
+    def rush_strategy(self, game_state):
+        pass
+    
+    
     def build_defences(self, game_state):
         """
         Build basic defenses using hardcoded locations.
