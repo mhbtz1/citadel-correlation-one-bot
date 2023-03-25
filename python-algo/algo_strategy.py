@@ -4,7 +4,7 @@ import math
 import warnings
 from sys import maxsize
 import json
-
+from collections import defaultdict
 
 """
 Most of the algo code you write will be in this file unless you create new
@@ -42,7 +42,23 @@ class AlgoStrategy(gamelib.AlgoCore):
         MP = 1
         SP = 0
         # This is a good place to do initial setup
-        self.scored_on_locations = []
+        self.scored_on_locations = [] #locations that the enemy has scored on
+        self.locations_scored_on = [] #locations we have scored on in the past
+        self.recent_points_of_attack = [] #locations of recent points our units have been attacked from
+        self.placed_units = defaultdict(tuple) #dictionary mapping position to if it is currently placed
+
+        self.current_resources = [-1, -1] #SP & MP points
+        self.enemy_resources = [-1, -1] #SP & MP points
+
+        self.rush_flag_status = 1 #will indicate how to randomize our offence strategy
+        self.defence_flag_status = 1 #will indicate how to randomize our defence strategy
+
+        self.ordered_turret_placement_preferences = [ [4, 11], [8, 11], [18, 11], [22, 11], [5, 11], [21, 11], [13, 11], [5, 10], [21, 10]]
+        #arrangement of preferenes over turret placement (can be rearranged by heuristics later based on attacked sides)
+        self.ordered_turret_upgrade_preferences = []
+
+        self.
+
 
     def on_turn(self, turn_state):
         """
@@ -56,9 +72,11 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
         
-        enemy_resources = game_state.get_resources(1)
         self.starter_strategy(game_state)
-        
+        self.rush_strategy(game_state)
+        self.defence_strategy(game_state)
+        self.update_heuristics(game_state)
+
         game_state.submit_turn()
 
 
@@ -104,7 +122,57 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     
     def rush_strategy(self, game_state):
+        current_resources = game_state.get_resources(0)
+        enemy_resources = game_state.get_resources(1)
+        spawn_locations = []
+        if(self.rush_flag == 1): #random small scout placement
+            r = random.uniform(0, 1)
+            if(r < 0.5):
+                p = random.randint(0, 13)
+                amount = random.randint(1, math.floor(math.log2(game_state.turn_number) + 1) )
+                game_state.attempt_spawn(SCOUT, [p, 13 - p], amount)
+        
+        elif(self.rush_flag == 2): #scout kamikaze
+            pass
+        elif(self.rush_flag == 3): #demolisher line
+            pass
+        elif(self.rush_flag == 4): 
+            pass
+
+    
+    def update_heuristics(self, game_state):
         pass
+
+
+    def defence_strategy(self, game_state):
+        #randomized turret + wall placement
+        if(self.defence_flag_status == 1): #use this flag for some early game stuff/potential demolisher randomization strat
+            built_turrets = 0
+            turret_limits = 4
+            current_resources = game_state.get_resources(0)[0]
+            locs = []
+            used_resources = 0
+            turret_cost = 6
+            upgrade_cost = 4
+
+
+            for p in self.ordered_turret_placement_preferences:
+                if(built_turrets >= 4):
+                    break
+                if( (not game_state.contains_stationary_unit(p)) and used_resources + turret_cost < current_resources):
+                    used_resources += turret_cost
+                    built_turrets += 1
+                    locs.append(p)
+            
+            
+            self.upgrading_heuristic(game_state)
+            game_state.attempt_spawn(TURRET, locs)
+
+        elif(self.defence_flag_status == 2):
+
+
+
+
     
     
     def build_defences(self, game_state):
