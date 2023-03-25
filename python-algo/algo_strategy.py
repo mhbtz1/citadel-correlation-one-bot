@@ -46,7 +46,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.locations_scored_on = [] #locations we have scored on in the past
         self.recent_points_of_attack = [] #locations of recent points our units have been attacked from
         self.placed_units = defaultdict(tuple) #dictionary mapping position to if it is currently placed
-        
+        self.turret_last_upgrade = defaultdict(int)
+        self.wall_last_upgrade = defaultdict(int)
+
+
         self.TURRET_LIMIT_PER_TURN = 4 #limit for number of turrets we build per turn
         self.TURRET_UPGRADE_LIMIT_PER_TURN = 2
         self.WALL_UPGRADE_LIMIT_PER_TURN = 8
@@ -133,6 +136,10 @@ class AlgoStrategy(gamelib.AlgoCore):
                 game_state.attempt_spawn(SUPPORT, support_locations)
 
     
+    def randomized_demolisher_lines(self, game_state):
+        pass
+
+
     def rush_strategy(self, game_state):
         current_resources = game_state.get_resources(0)
         enemy_resources = game_state.get_resources(1)
@@ -152,20 +159,26 @@ class AlgoStrategy(gamelib.AlgoCore):
             else:
                 num_afford = game_state.number_affordable(SCOUT)
                 
+                valid_pos = []
                 if(game_state.contains_stationary_unit([6, 9]) and game_state.contains_stationary_unit([7, 9])):
-                    game_state.attempt_spawn(SCOUT, [14, 0], num_afford)
+                    valid_pos.append([14, 0])
                 elif(game_state.contains_stationary_unit([20, 9]) and game_state.contains_stationary_unit([21, 9])):
-                    game_state.attempt_spawn(SCOUT, [13, 0], num_afford)
+                    valid_pos.append([13, 0])
+                
+                if(valid_pos != []):
+                    r = random.randint(0,len(valid_pos)-1)
+                    game_state.attempt_spawn(SCOUT, valid_pos[r], num_afford)
                 else:
                     pass
+
         elif(self.rush_flag_status == 2): #scout kamikaze
             pass
         elif(self.rush_flag_status == 3): #demolisher line
-            pass
+            self.randomized_demolisher_lines(game_state)
         elif(self.rush_flag_status == 4): 
             pass
 
-
+    
 
     def defence_strategy(self, game_state):
         #note: consider some self-destruct trap tactics (similar to boss 3) ?
@@ -211,20 +224,25 @@ class AlgoStrategy(gamelib.AlgoCore):
                         built_turrets += 1
                         turret_locs.append(position)
                         self.placed_units[(position[0], position[1])] = True
-                    elif(upgraded_turrets < turret_upgrade_limits and game_state.contains_stationary_unit(position) and  not game_state.game_map[position][0].upgraded ):
+                    elif(game_state.turn_number - self.turret_last_upgrade[(position[0], position[1])] > 10 and upgraded_turrets < turret_upgrade_limits and game_state.contains_stationary_unit(position) and  not game_state.game_map[position][0].upgraded ):
                         used_resources += turret_upgrade
                         upgraded_turrets += 1
                         turret_upgrade_locs.append(position)
                         self.placed_units[(position[0], position[1])] = True
+                        self.turret_last_upgrade[(position[0], position[1])] = game_state.turn_number
                 elif(unit_type == 'W'):
                     if( (not game_state.contains_stationary_unit(position)) and used_resources + wall_cost < current_resources):
                         used_resources += wall_cost
                         wall_locs.append(position)
                         self.placed_units[(position[0], position[1])] = True
-                    elif(upgraded_walls < wall_upgrade_limits and game_state.contains_stationary_unit(position) and not game_state.game_map[position][0].upgraded ):
-                        used_resources += wall_upgrade
-                        wall_upgrade_locs.append(position)
-                        self.placed_units[(position[0], position[1])] = True
+                    elif(game_state.turn_number - self.wall_last_upgrade[(position[0], position[1])] > 5 and upgraded_walls < wall_upgrade_limits and game_state.contains_stationary_unit(position) and not game_state.game_map[position][0].upgraded ):
+                        #modify wall upgrade heuristic to only upgrade walls at positions (6, 9), (7, 9), (20, 9), (21, 9)
+
+                        if(position in [ [6, 9], [7, 9], [20, 9], [21, 9] ]):
+                            used_resources += wall_upgrade
+                            wall_upgrade_locs.append(position)
+                            self.placed_units[(position[0], position[1])] = True
+                            self.wall_last_upgrade[(position[0], position[1])] = game_state.turn_number
       
 
             game_state.attempt_spawn(TURRET, turret_locs)
