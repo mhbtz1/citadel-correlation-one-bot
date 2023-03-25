@@ -46,7 +46,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.locations_scored_on = [] #locations we have scored on in the past
         self.recent_points_of_attack = [] #locations of recent points our units have been attacked from
         self.placed_units = defaultdict(tuple) #dictionary mapping position to if it is currently placed
+        
         self.TURRET_LIMIT_PER_TURN = 4 #limit for number of turrets we build per turn
+        self.TURRET_UPGRADE_LIMIT_PER_TURN = 2
+        self.WALL_UPGRADE_LIMIT_PER_TURN = 8
 
         self.current_resources = [-1, -1] #SP & MP points
         self.enemy_resources = [-1, -1] #SP & MP points
@@ -54,12 +57,15 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.rush_flag_status = 1 #will indicate how to randomize our offence strategy
         self.defence_flag_status = 1 #will indicate how to randomize our defence strategy
 
-        self.ordered_turret_placement_preferences = [ [4, 11], [22, 11], [6, 11], [20, 11], [8, 11], [18, 11], [4, 12], [22, 12], [6, 12], [20, 12], [8, 12], [18, 12] ]
-        #arrangement of preferenes over turret upgrades (can be rearranged by heuristics later based on attacked sides)
-        self.ordered_turret_upgrade_preferences = [ [4, 11], [22, 11], [6, 11], [20, 11], [8, 11], [18, 11], [4, 12], [22, 12], [6, 12], [20, 12], [8, 12], [18, 12] ]
 
-        self.ordered_wall_placement_preferences = []
-        self.oredered_wall_upgrade_preferences = []
+
+        #arrangement of turrets and walls ordered by preference of building
+        self.structure_one = [ ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'),  ([4, 12], 'T'), ([22, 12], 'T'), ([4, 12], 'T'), ([22, 12], 'T'), ([7, 12], 'T'), ([19, 12], 'T')]
+        #arrangement of preferenes over turret upgrades (can be rearranged by heuristics later based on attacked sides)
+        self.structure_one_upgrade_preference = [ ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'), ([4, 12], 'T'), ([22, 12], 'T'), ([6, 12], 'T'), ([20, 12], 'T'), ([7, 12], 'T'), ([19, 12], 'T') ]
+
+        self.structure_two = []
+        self.structure_two_upgrade_preference = []
 
 
     def on_turn(self, turn_state):
@@ -71,19 +77,17 @@ class AlgoStrategy(gamelib.AlgoCore):
         game engine.
         """
         game_state = gamelib.GameState(self.config, turn_state)
+        
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
         
         for k in self.placed_units.keys():
             if(not game_state.contains_stationary_unit([k[0], k[1]]) ):
-                game_state[ (k[0], k[1]) ] = False
+                self.placed_units[ (k[0], k[1]) ] = False
 
-        self.starter_strategy(game_state)
         self.rush_strategy(game_state)
         self.defence_strategy(game_state)
-
-        self.update_turret_preference_list(game_state)
-        self.update_turret_upgrade_list(game_state)
+        self.on_action_frame(turn_state)
 
         game_state.submit_turn()
 
@@ -132,65 +136,157 @@ class AlgoStrategy(gamelib.AlgoCore):
     def rush_strategy(self, game_state):
         current_resources = game_state.get_resources(0)
         enemy_resources = game_state.get_resources(1)
-        spawn_locations = []
-        if(self.rush_flag == 1): #random small scout placement
+        
+        if(self.rush_flag_status == 1): #random small scout placement
             r = random.uniform(0, 1)
-            if(r < 0.5):
+            amount = math.floor(random.normalvariate(4, 2))
+            if(r < 0.25):
                 p = random.randint(0, 13)
-                amount = random.randint(1, math.floor(math.log2(game_state.turn_number) + 1) )
-                game_state.attempt_spawn(SCOUT, [p, 13 - p], amount)
-            else:
-                p = random.randint(0, 13)
-                amount - random.randint(1, math.floor(math.log2(game_state.turn_number)) + 1)
+                game_state.attempt_spawn(DEMOLISHER, [p, 13 - p], amount)
+                gamelib.debug_write("Case One: Placing demolisher at position {}, {}".format(p, 13-p))
+            elif (r > 0.75):
+                p = (int)(random.randint(0, 13))
                 d = {0 : 14, 1 : 15, 2 : 16, 3: 17, 4 : 18, 5 : 19, 6: 20, 7 : 21, 8 : 22, 9 : 23, 10: 24, 11: 25, 12: 26, 13: 27}
-                game_state.attempt_spawn(SCOUT, [p, d[p]], amount)
-        elif(self.rush_flag == 2): #scout kamikaze
+                game_state.attempt_spawn(DEMOLISHER, [d[p], p], amount)
+                gamelib.debug_write("Case Two: Placing demolisher at position {}, {}".format(d[p], p))
+            else:
+                num_afford = game_state.number_affordable(SCOUT)
+                
+                if(game_state.contains_stationary_unit([6, 9]) and game_state.contains_stationary_unit([7, 9])):
+                    game_state.attempt_spawn(SCOUT, [14, 0], num_afford)
+                elif(game_state.contains_stationary_unit([20, 9]) and game_state.contains_stationary_unit([21, 9])):
+                    game_state.attempt_spawn(SCOUT, [13, 0], num_afford)
+                else:
+                    pass
+        elif(self.rush_flag_status == 2): #scout kamikaze
             pass
-        elif(self.rush_flag == 3): #demolisher line
+        elif(self.rush_flag_status == 3): #demolisher line
             pass
-        elif(self.rush_flag == 4): 
+        elif(self.rush_flag_status == 4): 
             pass
 
-
-    def update_turret_upgrade_list(self, game_state):
-        #if the health of a turret is very low, we are incentivized to not upgrade it & rather defend it with a interceptor.
-        new_preferences = []
-
-        for j in self.ordered_turret_upgrade_preferences:
-            if(game_state.get_)
 
 
     def defence_strategy(self, game_state):
+        #note: consider some self-destruct trap tactics (similar to boss 3) ?
+
+        turret_cost = 6
+        turret_upgrade = 4
+        wall_cost = 0.5
+        wall_upgrade = 1
+        
         #randomized turret + wall placement
-        if(self.defence_flag_status == 1): #use this flag for some early game stuff/potential demolisher randomization strat
+        if(self.defence_flag_status == 1): #use first structure
+
             built_turrets = 0
+            upgraded_turrets = 0
+            upgraded_walls = 0
+
             turret_limits = self.TURRET_LIMIT_PER_TURN #only build at most 4 turrets per turn
+            turret_upgrade_limits = self.TURRET_UPGRADE_LIMIT_PER_TURN
+            wall_upgrade_limits = self.WALL_UPGRADE_LIMIT_PER_TURN
+
             current_resources = game_state.get_resources(0)[0]
-            locs = []
+            turret_locs = []
+            wall_locs = []
+            turret_upgrade_locs = []
+            wall_upgrade_locs = []
+
             used_resources = 0
-            turret_cost = 6
-            upgrade_cost = 4
 
             #if a turret is at sufficiently low health
-            for p in self.ordered_turret_placement_preferences:
-                if(built_turrets >= 4):
+            
+            upgrade_or_build = random.uniform(0, 1)
+
+
+            
+            for p in self.structure_one:
+                position = p[0]
+                unit_type = p[1]
+                if(built_turrets >= turret_limits):
                     break
-                if( (not game_state.contains_stationary_unit(p)) and used_resources + turret_cost < current_resources):
-                    used_resources += turret_cost
-                    built_turrets += 1
-                    locs.append(p)
-                    self.placed_units[(p[0], p[1])] = True
-            
-            
-            game_state.attempt_spawn(TURRET, locs)
+                if(unit_type == 'T'):
+                    if( (not game_state.contains_stationary_unit(position)) and used_resources + turret_cost < current_resources):
+                        used_resources += turret_cost
+                        built_turrets += 1
+                        turret_locs.append(position)
+                        self.placed_units[(position[0], position[1])] = True
+                    elif(upgraded_turrets < turret_upgrade_limits and game_state.contains_stationary_unit(position) and  not game_state.game_map[position][0].upgraded ):
+                        used_resources += turret_upgrade
+                        upgraded_turrets += 1
+                        turret_upgrade_locs.append(position)
+                        self.placed_units[(position[0], position[1])] = True
+                elif(unit_type == 'W'):
+                    if( (not game_state.contains_stationary_unit(position)) and used_resources + wall_cost < current_resources):
+                        used_resources += wall_cost
+                        wall_locs.append(position)
+                        self.placed_units[(position[0], position[1])] = True
+                    elif(upgraded_walls < wall_upgrade_limits and game_state.contains_stationary_unit(position) and not game_state.game_map[position][0].upgraded ):
+                        used_resources += wall_upgrade
+                        wall_upgrade_locs.append(position)
+                        self.placed_units[(position[0], position[1])] = True
+      
 
-        elif(self.defence_flag_status == 2): #place down walls that form corridors for demolishers & scouts
-            positions = ran
+            game_state.attempt_spawn(TURRET, turret_locs)
+            game_state.attempt_spawn(WALL, wall_locs)
+            game_state.attempt_upgrade(turret_upgrade_locs)
+            game_state.attempt_upgrade(wall_upgrade_locs)
 
 
+        elif(self.defence_flag_status == 2): #use second structure
+            pass
 
+        elif(self.defence_flag_status == 3):
+            pass
 
     
+    def health_at_position(self, game_state, location):
+        return game_state.game_map[location][0].health
+
+    def enemies_at_position(self, game_state, location):
+        if( (game_state.game_map[location[0], location[1]])[0].player_index == 1 ):
+            return (True, game_state.game_map[location])
+        else:
+            return (False, [])
+
+    def detect_enemy_unit(self, game_state, unit_type=None, valid_x = None, valid_y = None):
+        total_units = 0
+        for location in game_state.game_map:
+            if game_state.contains_stationary_unit(location):
+                for unit in game_state.game_map[location]:
+                    if unit.player_index == 1 and (unit_type is None or unit.unit_type == unit_type) and (valid_x is None or location[0] in valid_x) and (valid_y is None or location[1] in valid_y):
+                        total_units += 1
+        return total_units
+        
+    def filter_blocked_locations(self, locations, game_state):
+        filtered = []
+        for location in locations:
+            if not game_state.contains_stationary_unit(location):
+                filtered.append(location)
+        return filtered
+
+    def on_action_frame(self, turn_string):
+        """
+        This is the action frame of the game. This function could be called 
+        hundreds of times per turn and could slow the algo down so avoid putting slow code here.
+        Processing the action frames is complicated so we only suggest it if you have time and experience.
+        Full doc on format of a game frame at in json-docs.html in the root of the Starterkit.
+        """
+        # Let's record at what position we get scored on
+        state = json.loads(turn_string)
+        events = state["events"]
+        breaches = events["breach"]
+        for breach in breaches:
+            location = breach[0]
+            unit_owner_self = True if breach[4] == 1 else False
+            # When parsing the frame data directly, 
+            # 1 is integer for yourself, 2 is opponent (StarterKit code uses 0, 1 as player_index instead)
+            if not unit_owner_self:
+                gamelib.debug_write("Got scored on at: {}".format(location))
+                self.scored_on_locations.append(location)
+                gamelib.debug_write("All locations: {}".format(self.scored_on_locations))
+
+
     
     def build_defences(self, game_state):
         """
@@ -285,44 +381,6 @@ class AlgoStrategy(gamelib.AlgoCore):
         
         # Now just return the location that takes the least damage
         return location_options[damages.index(min(damages))]
-
-    def detect_enemy_unit(self, game_state, unit_type=None, valid_x = None, valid_y = None):
-        total_units = 0
-        for location in game_state.game_map:
-            if game_state.contains_stationary_unit(location):
-                for unit in game_state.game_map[location]:
-                    if unit.player_index == 1 and (unit_type is None or unit.unit_type == unit_type) and (valid_x is None or location[0] in valid_x) and (valid_y is None or location[1] in valid_y):
-                        total_units += 1
-        return total_units
-        
-    def filter_blocked_locations(self, locations, game_state):
-        filtered = []
-        for location in locations:
-            if not game_state.contains_stationary_unit(location):
-                filtered.append(location)
-        return filtered
-
-    def on_action_frame(self, turn_string):
-        """
-        This is the action frame of the game. This function could be called 
-        hundreds of times per turn and could slow the algo down so avoid putting slow code here.
-        Processing the action frames is complicated so we only suggest it if you have time and experience.
-        Full doc on format of a game frame at in json-docs.html in the root of the Starterkit.
-        """
-        # Let's record at what position we get scored on
-        state = json.loads(turn_string)
-        events = state["events"]
-        breaches = events["breach"]
-        for breach in breaches:
-            location = breach[0]
-            unit_owner_self = True if breach[4] == 1 else False
-            # When parsing the frame data directly, 
-            # 1 is integer for yourself, 2 is opponent (StarterKit code uses 0, 1 as player_index instead)
-            if not unit_owner_self:
-                gamelib.debug_write("Got scored on at: {}".format(location))
-                self.scored_on_locations.append(location)
-                gamelib.debug_write("All locations: {}".format(self.scored_on_locations))
-
 
 if __name__ == "__main__":
     algo = AlgoStrategy()
