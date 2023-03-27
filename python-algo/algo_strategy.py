@@ -33,7 +33,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         gamelib.debug_write('Configuring your custom algo strategy...')
         self.config = config
-        global WALL, SUPPORT, TURRET, SCOUT, DEMOLISHER, INTERCEPTOR, MP, SP, senser
+        global WALL, SUPPORT, TURRET, SCOUT, DEMOLISHER, INTERCEPTOR, MP, SP, senser, removed_positions
         WALL = config["unitInformation"][0]["shorthand"]
         SUPPORT = config["unitInformation"][1]["shorthand"]
         TURRET = config["unitInformation"][2]["shorthand"]
@@ -56,18 +56,24 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.TURRET_UPGRADE_LIMIT_PER_TURN = 2
         self.WALL_UPGRADE_LIMIT_PER_TURN = 8
 
+        self.TURRET_BUILD_COOLDOWN = 4
+        self.WALL_BUILD_COOLDOWN = 2
+        self.LAST_WALL_TIME = -1
+        self.LAST_TURRET_TIME = -1
+
         self.ATTACK_COOLDOWN = 3
         self.last_attack = -1
 
-        self.rush_flag_status = 4 #will indicate how to randomize our offence strategy
+        self.rush_flag_status = 1 #will indicate how to randomize our offence strategy
         self.defence_flag_status = 1 #will indicate how to randomize our defence strategy
 
-
+        removed_positions = [ [ [9, 11], [13, 11] ], [ [8, 11], [12, 11] ], [ [10, 11], [14, 11] ], 
+                            [ [11, 11], [15, 11] ], [ [9, 11], [13, 11], [17, 11] ], [ [13, 11] ], [ [10, 11] ], [ [15, 11] ] ]
 
         #arrangement of turrets and walls ordered by preference of building
-        self.structure_one = [ ([4, 12], 'T'), ([23, 12], 'T'), ( [9, 13], 'T'), ( [17, 13], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([7, 12], 'T'), ([19, 12], 'T'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'), ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T') ]
+        self.structure_one = [ ([3, 12], 'T'), ([24, 12], 'T'), ( [0, 13], 'T'), ( [27, 13], 'T'), ( [9, 13], 'T'), ( [17, 13], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([7, 12], 'T'), ([19, 12], 'T'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'), ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T') ]
         #arrangement of preferenes over turret upgrades (can be rearranged by heuristics later based on attacked sides)
-        self.structure_one_upgrade_preference = [ ([4, 12], 'T'), ([23, 12], 'T'), ( [9, 13], 'T'), ( [17, 13], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([7, 12], 'T'), ([19, 12], 'T'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'), ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T') ]
+        self.structure_one_upgrade_preference = [ ([3, 12], 'T'), ([24, 12], 'T'), ( [0, 13], 'T'), ( [27, 13], 'T'), ( [9, 13], 'T'), ( [17, 13], 'T'), ([6, 9], 'W'), ([7, 9], 'W'), ([7, 12], 'T'), ([19, 12], 'T'), ([20, 9], 'W'), ([21, 9], 'W'), ([8, 11], 'W'), ([9, 11], 'W'), ([10, 11], 'W'), ([11, 11], 'W'), ([12, 11], 'W'),([13, 11], 'W'), ([14, 11], 'W'), ([15, 11], 'W'), ([16, 11], 'W'), ([17, 11], 'W'), ([18, 11], 'W'), ([5, 11], 'T'), ([21, 11], 'T'), ([7, 11], 'T'), ([19, 11], 'T') ]
         self.structure_one_gapped_walls = []
 
 
@@ -95,6 +101,8 @@ class AlgoStrategy(gamelib.AlgoCore):
                 self.placed_units[ (k[0], k[1]) ] = False
 
         attacking_demos = []
+        attacking_interceptors = []
+        attacking_scouts = []
         
         for location in game_state.game_map:
             if game_state.contains_stationary_unit(location) and game_state.game_map[location][0].player_index == 0:
@@ -102,13 +110,18 @@ class AlgoStrategy(gamelib.AlgoCore):
                 for atk in atkr:
                     if(atk.unit_type == DEMOLISHER):
                         attacking_demos.append([atk.x, atk.y])
+                    if(atk.unit_type == SCOUT):
+                        attacking_scouts.append([atk.x, atk.y])
+                    if(atk.unit_type == INTERCEPTOR):
+                        attacking_interceptors.append([atk.x, atk.y])
             
         gamelib.debug_write("Current detected attacking demolishers: {}".format(attacking_demos))
 
-        demo_spots = senser.compute_optimal_demo_allocations(attacking_demos)
-
-
-        self.heuristic_rush_strategy(game_state, demo_spots)
+        if(game_state.turn_number < 1000):
+            self.heuristic_rush_strategy(game_state)
+        else:
+            self.deterministic_rush_strategy(game_state, attacking_demos, attacking_interceptors, attacking_scouts)
+        
         self.defence_strategy(game_state)
         
         self.on_action_frame(turn_state)
@@ -171,9 +184,6 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         desired_wall_orientation = []
 
-        removed_positions = [ [ [9, 11], [13, 11] ], [ [8, 11], [12, 11] ], [ [10, 11], [14, 11] ], 
-                                [ [11, 11], [15, 11] ], [ [9, 11], [13, 11], [17, 11] ], [ [13, 11] ], [ [10, 11] ], [ [15, 11] ] ]
-
         num_opening = random.randint(0, len(removed_positions)-1)
 
         rem = removed_positions[num_opening]
@@ -189,14 +199,15 @@ class AlgoStrategy(gamelib.AlgoCore):
         return (desired_wall_orientation, rem)
     
 
-    def deterministic_demolisher_openings(self, game_state):
+    def deterministic_rush_strategy(self, game_state, demo_sightings, scout_sightings = None, interceptor_sightings = None):
         #determine optimal demolisher opening to let demolishers to target proper enemy cells
         desired_wall_orientation = []
 
-        removed_positions = [ [ [9, 11], [13, 11] ], [ [8, 11], [12, 11] ], [ [10, 11], [14, 11] ], 
-                                [ [11, 11], [15, 11] ], [ [9, 11], [13, 11], [17, 11] ], [ [13, 11] ], [ [10, 11] ], [ [15, 11] ] ]
+        (positions, left_size, right_size) = senser.compute_optimal_demo_allocations(game_state, demo_sightings)
 
-        
+        game_state.attempt_spawn(DEMOLISHER, positions[0],  left_size)
+        game_state.attempt_spawn(DEMOLISHER, position[1], right_size)
+
         return desired_wall_orientation
     
     def random_troop_allocation(self, game_state, troop_type, amount):
@@ -224,7 +235,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def heuristic_rush_strategy(self, game_state, optimal_demo_locations = None):
         current_defense_heuristic = self.defense_heuristic_state(game_state)
-
+        gamelib.debug_write("Current defense heuristic value: {}".format(current_defense_heuristic))
         if(self.rush_flag_status == 1): #random small scout placement
             r = random.uniform(0, 1)
             amount = math.floor(random.normalvariate(6, 1))
@@ -371,6 +382,8 @@ class AlgoStrategy(gamelib.AlgoCore):
                         turret_upgrade_locs.append(position)
                         self.placed_units[(position[0], position[1])] = True
                         self.turret_last_upgrade[(position[0], position[1])] = game_state.turn_number
+
+
                 elif(unit_type == 'W'):
                     if(position in self.structure_one_gapped_walls):
                         continue
