@@ -4,8 +4,6 @@ import math
 import warnings
 from sys import maxsize
 import json
-
-
 """
 Most of the algo code you write will be in this file unless you create new
 modules yourself. Start by modifying the 'on_turn' function.
@@ -17,6 +15,14 @@ Advanced strategy tips:
   - The GameState.map object can be manually manipulated to create hypothetical 
   board states. Though, we recommended making a copy of the map to preserve 
   the actual current map state.
+"""
+
+""" 
+    General idea for design is that our algorithm is basically a function F of
+    the current map state and some other parameters, and outputs a tuple (offensive strat, defensive strat)
+    
+    Where the the offensive strat is effectively a new series of offensive units' placements,
+    and the defensive strat is a series of new defensive units' placements.
 """
 
 class AlgoStrategy(gamelib.AlgoCore):
@@ -222,6 +228,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         state = json.loads(turn_string)
         events = state["events"]
         breaches = events["breach"]
+        
+        fd_us = open('our_score_data.txt', 'w')
+        fd_en = open('enemy_score_data.txt', 'w')
+        
         for breach in breaches:
             location = breach[0]
             unit_owner_self = True if breach[4] == 1 else False
@@ -230,7 +240,10 @@ class AlgoStrategy(gamelib.AlgoCore):
             if not unit_owner_self:
                 gamelib.debug_write("Got scored on at: {}".format(location))
                 self.scored_on_locations.append(location)
+                fd_en.write('{}, {}'.format(location[0], location[1]))
                 gamelib.debug_write("All locations: {}".format(self.scored_on_locations))
+            else:
+                fd_us.write('{}, {}'.format(location[0], location[1]))
 
 
 if __name__ == "__main__":
